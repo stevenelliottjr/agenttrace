@@ -8,13 +8,21 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Error types for AgentTrace operations
 #[derive(Error, Debug)]
 pub enum Error {
-    /// Database error
+    /// Database error from sqlx
     #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+    DatabaseSqlx(#[from] sqlx::Error),
 
-    /// Redis error
+    /// Database error (string)
+    #[error("Database error: {0}")]
+    Database(String),
+
+    /// Redis error from driver
     #[error("Redis error: {0}")]
-    Redis(#[from] redis::RedisError),
+    RedisDriver(#[from] redis::RedisError),
+
+    /// Redis error (string)
+    #[error("Redis error: {0}")]
+    Redis(String),
 
     /// Configuration error
     #[error("Configuration error: {0}")]
@@ -44,9 +52,21 @@ pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// Serialization error
+    /// Serialization error from serde_json
     #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
+    SerializationJson(#[from] serde_json::Error),
+
+    /// Serialization error (string)
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    /// gRPC/Tonic error
+    #[error("gRPC error: {0}")]
+    Grpc(String),
+
+    /// Channel send error
+    #[error("Channel error: {0}")]
+    Channel(String),
 }
 
 impl Error {
