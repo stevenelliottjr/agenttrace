@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # TimescaleDB (PostgreSQL with time-series extensions)
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: agenttrace-db
+    environment:
+      POSTGRES_USER: agenttrace
+      POSTGRES_PASSWORD: agenttrace_dev
+      POSTGRES_DB: agenttrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agenttrace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for pub/sub and caching
+  redis:
+    image: redis:7-alpine
+    container_name: agenttrace-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # AgentTrace Collector (uncomment when built)
+  # collector:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: agenttrace-collector
+  #   ports:
+  #     - "8080:8080"   # HTTP API
+  #     - "4317:4317"   # gRPC
+  #     - "4318:4318/udp"  # UDP
+  #   environment:
+  #     DATABASE_URL: postgres://agenttrace:agenttrace_dev@timescaledb:5432/agenttrace
+  #     REDIS_URL: redis://redis:6379
+  #     RUST_LOG: info
+  #   depends_on:
+  #     timescaledb:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # Web Dashboard (uncomment when built)
+  # dashboard:
+  #   build:
+  #     context: ./dashboard
+  #     dockerfile: Dockerfile
+  #   container_name: agenttrace-dashboard
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     VITE_API_URL: http://localhost:8080
+  #   depends_on:
+  #     - collector
+
+volumes:
+  timescaledb_data:
+  redis_data:
+
+networks:
+  default:
+    name: agenttrace-network
