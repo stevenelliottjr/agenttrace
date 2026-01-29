@@ -79,7 +79,9 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            url: "postgres://agenttrace:agenttrace_dev@localhost:5432/agenttrace".to_string(),
+            // Read from DATABASE_URL env var, or use simple local default
+            url: std::env::var("DATABASE_URL")
+                .unwrap_or_else(|_| "postgres://localhost/agenttrace".to_string()),
             max_connections: 20,
             min_connections: 5,
         }
