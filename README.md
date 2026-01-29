@@ -8,7 +8,7 @@
 **Observability for AI Agents** — Real-time telemetry, cost attribution, and reasoning chain visualization.
 
 <p align="center">
-  <img src="docs/assets/dashboard-preview.png" alt="AgentTrace Dashboard" width="800">
+  <img src="docs/assets/dashboard-preview.svg" alt="AgentTrace Dashboard" width="900">
 </p>
 
 ---
