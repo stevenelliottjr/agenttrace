@@ -26,6 +26,8 @@
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
 
 pub mod api;
 pub mod collector;
@@ -40,7 +42,9 @@ pub use error::{Error, Result};
 
 /// Re-exports for convenience
 pub mod prelude {
+    pub use crate::collector::{Collector, Pipeline};
     pub use crate::config::Config;
+    pub use crate::db::Database;
     pub use crate::error::{Error, Result};
     pub use crate::models::*;
 }

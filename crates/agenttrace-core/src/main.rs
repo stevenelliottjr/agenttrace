@@ -358,27 +358,43 @@ fn load_config(_path: Option<&str>) -> anyhow::Result<agenttrace::Config> {
 }
 
 async fn run_serve(
-    _config: agenttrace::Config,
+    mut config: agenttrace::Config,
     http_port: u16,
     grpc_port: u16,
-    udp_port: u16,
+    _udp_port: u16,
 ) -> anyhow::Result<()> {
-    info!(
-        "Starting AgentTrace collector on HTTP:{}, gRPC:{}, UDP:{}",
-        http_port, grpc_port, udp_port
-    );
+    // Override config with CLI args
+    config.server.http_port = http_port;
+    config.server.grpc_port = grpc_port;
 
-    // TODO: Implement collector
     println!("🚀 AgentTrace collector starting...");
-    println!("   HTTP API: http://0.0.0.0:{http_port}");
-    println!("   gRPC:     0.0.0.0:{grpc_port}");
-    println!("   UDP:      0.0.0.0:{udp_port}");
+    println!("   HTTP API: http://{}:{}", config.server.host, http_port);
+    println!("   gRPC:     {}:{}", config.server.host, grpc_port);
+    println!("   Database: {}", config.database.url);
+    println!("   Redis:    {}", config.redis.url);
     println!();
-    println!("Press Ctrl+C to stop");
 
-    // Keep running until interrupted
-    tokio::signal::ctrl_c().await?;
-    println!("\nShutting down...");
+    // Create and start collector
+    let mut collector = match agenttrace::collector::Collector::new(config).await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("❌ Failed to initialize collector: {}", e);
+            eprintln!();
+            eprintln!("Make sure TimescaleDB and Redis are running:");
+            eprintln!("  docker-compose up -d timescaledb redis");
+            return Err(anyhow::anyhow!("Collector initialization failed: {}", e));
+        }
+    };
+
+    info!("Collector initialized successfully");
+    println!("✅ Collector ready. Press Ctrl+C to stop.");
+    println!();
+
+    // Start serving
+    if let Err(e) = collector.start().await {
+        eprintln!("❌ Collector error: {}", e);
+        return Err(anyhow::anyhow!("Collector error: {}", e));
+    }
 
     Ok(())
 }
