@@ -1,0 +1,38 @@
+# AgentTrace Collector Dockerfile
+FROM rust:1.75-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy manifests
+COPY crates/agenttrace-core/Cargo.toml crates/agenttrace-core/Cargo.lock ./
+
+# Create dummy src to cache dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release && rm -rf src
+
+# Copy actual source
+COPY crates/agenttrace-core/src ./src
+
+# Build for release
+RUN touch src/main.rs && cargo build --release
+
+# Runtime image
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/target/release/agenttrace /usr/local/bin/
+
+EXPOSE 4317 4318 8080
+
+ENTRYPOINT ["agenttrace"]
+CMD ["serve"]

@@ -1,0 +1,184 @@
+// AgentTrace Protocol Buffer Definitions
+// See SPEC.md for full protocol documentation
+
+syntax = "proto3";
+
+package agenttrace.v1;
+
+option go_package = "github.com/agenttrace/agenttrace/proto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// AgentTrace Collector Service
+service AgentTraceCollector {
+  // Stream spans to the collector
+  rpc StreamSpans(stream SpanBatch) returns (StreamSpansResponse);
+
+  // Send a single span
+  rpc SendSpan(Span) returns (SendSpanResponse);
+
+  // Session management
+  rpc StartSession(StartSessionRequest) returns (StartSessionResponse);
+  rpc EndSession(EndSessionRequest) returns (EndSessionResponse);
+
+  // Health check
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message SpanBatch {
+  repeated Span spans = 1;
+}
+
+message Span {
+  string span_id = 1;
+  string trace_id = 2;
+  optional string parent_span_id = 3;
+  string session_id = 4;
+  string name = 5;
+  SpanType span_type = 6;
+  google.protobuf.Timestamp start_time = 7;
+  optional google.protobuf.Timestamp end_time = 8;
+  SpanStatus status = 9;
+  SpanAttributes attributes = 10;
+  repeated SpanEvent events = 11;
+  optional TokenUsage token_usage = 12;
+  SpanMetadata metadata = 13;
+}
+
+enum SpanType {
+  SPAN_TYPE_UNSPECIFIED = 0;
+  SPAN_TYPE_TASK = 1;
+  SPAN_TYPE_LLM_CALL = 2;
+  SPAN_TYPE_TOOL_EXECUTION = 3;
+  SPAN_TYPE_REASONING = 4;
+  SPAN_TYPE_MEMORY_RETRIEVAL = 5;
+  SPAN_TYPE_MEMORY_STORE = 6;
+  SPAN_TYPE_FILE_READ = 7;
+  SPAN_TYPE_FILE_WRITE = 8;
+  SPAN_TYPE_API_CALL = 9;
+  SPAN_TYPE_CODE_EXECUTION = 10;
+  SPAN_TYPE_VERIFICATION = 11;
+  SPAN_TYPE_CUSTOM = 100;
+}
+
+message SpanStatus {
+  StatusCode code = 1;
+  optional string message = 2;
+  optional string error_code = 3;
+}
+
+enum StatusCode {
+  STATUS_CODE_UNSPECIFIED = 0;
+  STATUS_CODE_RUNNING = 1;
+  STATUS_CODE_OK = 2;
+  STATUS_CODE_ERROR = 3;
+  STATUS_CODE_CANCELLED = 4;
+  STATUS_CODE_TIMEOUT = 5;
+}
+
+message SpanAttributes {
+  optional LlmAttributes llm = 1;
+  optional ToolAttributes tool = 2;
+  optional FileAttributes file = 3;
+  google.protobuf.Struct custom = 4;
+}
+
+message LlmAttributes {
+  string model = 1;
+  string provider = 2;
+  optional float temperature = 3;
+  optional int32 max_tokens = 4;
+  optional string prompt_preview = 5;
+  optional string response_preview = 6;
+  optional bool thinking_enabled = 7;
+  optional string stop_reason = 8;
+}
+
+message ToolAttributes {
+  string tool_name = 1;
+  optional google.protobuf.Struct input = 2;
+  optional string output_preview = 3;
+  bool success = 4;
+}
+
+message FileAttributes {
+  string path = 1;
+  FileOperation operation = 2;
+  optional int64 bytes = 3;
+  optional int32 lines = 4;
+}
+
+enum FileOperation {
+  FILE_OPERATION_UNSPECIFIED = 0;
+  FILE_OPERATION_READ = 1;
+  FILE_OPERATION_WRITE = 2;
+  FILE_OPERATION_CREATE = 3;
+  FILE_OPERATION_DELETE = 4;
+  FILE_OPERATION_MOVE = 5;
+  FILE_OPERATION_COPY = 6;
+}
+
+message SpanEvent {
+  string name = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  google.protobuf.Struct attributes = 3;
+}
+
+message TokenUsage {
+  int32 input_tokens = 1;
+  int32 output_tokens = 2;
+  int32 total_tokens = 3;
+  optional int32 cache_read_tokens = 4;
+  optional int32 cache_creation_tokens = 5;
+}
+
+message SpanMetadata {
+  optional string framework = 1;
+  optional string framework_version = 2;
+  string sdk_version = 3;
+  optional string hostname = 4;
+  repeated string tags = 5;
+}
+
+message StartSessionRequest {
+  string session_id = 1;
+  optional string name = 2;
+  SpanMetadata metadata = 3;
+}
+
+message StartSessionResponse {
+  bool success = 1;
+}
+
+message EndSessionRequest {
+  string session_id = 1;
+}
+
+message EndSessionResponse {
+  bool success = 1;
+  SessionSummary summary = 2;
+}
+
+message SessionSummary {
+  int64 total_spans = 1;
+  int64 total_tokens = 2;
+  double total_cost_usd = 3;
+  int64 duration_ms = 4;
+}
+
+message StreamSpansResponse {
+  int32 accepted = 1;
+  int32 rejected = 2;
+}
+
+message SendSpanResponse {
+  bool success = 1;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string version = 2;
+}
