@@ -34,6 +34,7 @@ impl CostCalculator {
         let mut pricing = HashMap::new();
 
         // Anthropic Claude models (as of Jan 2025)
+        // Claude 3 family
         pricing.insert(
             "claude-3-opus".to_string(),
             ModelPricing {
@@ -43,7 +44,32 @@ impl CostCalculator {
             },
         );
         pricing.insert(
+            "claude-3-sonnet".to_string(),
+            ModelPricing {
+                input_per_million: 3.0,
+                output_per_million: 15.0,
+                cached_input_per_million: Some(0.3),
+            },
+        );
+        pricing.insert(
+            "claude-3-haiku".to_string(),
+            ModelPricing {
+                input_per_million: 0.25,
+                output_per_million: 1.25,
+                cached_input_per_million: Some(0.03),
+            },
+        );
+        // Claude 3.5 family
+        pricing.insert(
             "claude-3-5-sonnet".to_string(),
+            ModelPricing {
+                input_per_million: 3.0,
+                output_per_million: 15.0,
+                cached_input_per_million: Some(0.3),
+            },
+        );
+        pricing.insert(
+            "claude-3.5-sonnet".to_string(),
             ModelPricing {
                 input_per_million: 3.0,
                 output_per_million: 15.0,
@@ -58,6 +84,15 @@ impl CostCalculator {
                 cached_input_per_million: Some(0.08),
             },
         );
+        pricing.insert(
+            "claude-3.5-haiku".to_string(),
+            ModelPricing {
+                input_per_million: 0.80,
+                output_per_million: 4.0,
+                cached_input_per_million: Some(0.08),
+            },
+        );
+        // Claude 4 family
         pricing.insert(
             "claude-sonnet-4".to_string(),
             ModelPricing {

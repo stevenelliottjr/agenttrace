@@ -79,7 +79,7 @@ impl SpanRepository {
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
                 $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
             )
-            ON CONFLICT (id, started_at) DO UPDATE SET
+            ON CONFLICT (span_id, started_at) DO UPDATE SET
                 ended_at = EXCLUDED.ended_at,
                 duration_ms = EXCLUDED.duration_ms,
                 status = EXCLUDED.status,
@@ -147,7 +147,7 @@ impl SpanRepository {
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
                     $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
                 )
-                ON CONFLICT (id, started_at) DO NOTHING
+                ON CONFLICT (span_id, started_at) DO NOTHING
                 "#,
             )
             .bind(&span.id)
@@ -192,7 +192,13 @@ impl SpanRepository {
     pub async fn get_by_id(&self, id: &Uuid) -> Result<Option<Span>> {
         let row = sqlx::query(
             r#"
-            SELECT * FROM spans WHERE id = $1
+            SELECT id, span_id, trace_id, parent_span_id, operation_name, service_name,
+                   span_kind, started_at, ended_at, duration_ms, status, status_message,
+                   model_name, model_provider, tokens_in, tokens_out, tokens_reasoning,
+                   CAST(cost_usd AS DOUBLE PRECISION) as cost_usd,
+                   tool_name, tool_input, tool_output, tool_duration_ms,
+                   prompt_preview, completion_preview, attributes, events
+            FROM spans WHERE id = $1
             "#,
         )
         .bind(id)
@@ -210,7 +216,13 @@ impl SpanRepository {
     pub async fn get_by_trace_id(&self, trace_id: &str) -> Result<Vec<Span>> {
         let rows = sqlx::query(
             r#"
-            SELECT * FROM spans WHERE trace_id = $1 ORDER BY started_at ASC
+            SELECT id, span_id, trace_id, parent_span_id, operation_name, service_name,
+                   span_kind, started_at, ended_at, duration_ms, status, status_message,
+                   model_name, model_provider, tokens_in, tokens_out, tokens_reasoning,
+                   CAST(cost_usd AS DOUBLE PRECISION) as cost_usd,
+                   tool_name, tool_input, tool_output, tool_duration_ms,
+                   prompt_preview, completion_preview, attributes, events
+            FROM spans WHERE trace_id = $1 ORDER BY started_at ASC
             "#,
         )
         .bind(trace_id)
@@ -225,7 +237,13 @@ impl SpanRepository {
     pub async fn get_recent(&self, limit: i64) -> Result<Vec<Span>> {
         let rows = sqlx::query(
             r#"
-            SELECT * FROM spans ORDER BY started_at DESC LIMIT $1
+            SELECT id, span_id, trace_id, parent_span_id, operation_name, service_name,
+                   span_kind, started_at, ended_at, duration_ms, status, status_message,
+                   model_name, model_provider, tokens_in, tokens_out, tokens_reasoning,
+                   CAST(cost_usd AS DOUBLE PRECISION) as cost_usd,
+                   tool_name, tool_input, tool_output, tool_duration_ms,
+                   prompt_preview, completion_preview, attributes, events
+            FROM spans ORDER BY started_at DESC LIMIT $1
             "#,
         )
         .bind(limit)

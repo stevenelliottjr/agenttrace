@@ -1,7 +1,10 @@
 //! Redis connection and pub/sub streaming
 
 use deadpool_redis::{Config as RedisConfig, Pool, Runtime};
+use futures_util::StreamExt;
+use redis::aio::PubSub;
 use redis::AsyncCommands;
+use tokio::sync::mpsc;
 
 use crate::config::RedisConfig as AppRedisConfig;
 use crate::error::{Error, Result};
@@ -11,6 +14,7 @@ use crate::models::Span;
 #[derive(Clone)]
 pub struct RedisPool {
     pool: Pool,
+    url: String,
 }
 
 impl RedisPool {
@@ -21,7 +25,10 @@ impl RedisPool {
             .create_pool(Some(Runtime::Tokio1))
             .map_err(|e| Error::Redis(e.to_string()))?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            url: config.url.clone(),
+        })
     }
 
     /// Health check
@@ -37,6 +44,59 @@ impl RedisPool {
     /// Get the underlying pool
     pub fn pool(&self) -> &Pool {
         &self.pool
+    }
+
+    /// Get the Redis URL for creating pub/sub connections
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Subscribe to a channel and return a receiver for messages
+    pub async fn subscribe(&self, channel: &str) -> Result<mpsc::Receiver<String>> {
+        let client = redis::Client::open(self.url.as_str())
+            .map_err(|e| Error::Redis(e.to_string()))?;
+
+        let (tx, rx) = mpsc::channel::<String>(100);
+        let channel = channel.to_string();
+
+        // Spawn a task that creates the pubsub connection and listens for messages
+        tokio::spawn(async move {
+            // Get a dedicated connection for pubsub
+            let conn = match client.get_async_connection().await {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("Failed to get Redis connection for pubsub: {}", e);
+                    return;
+                }
+            };
+
+            let mut pubsub: PubSub = conn.into_pubsub();
+
+            if let Err(e) = pubsub.subscribe(&channel).await {
+                tracing::error!("Failed to subscribe to channel {}: {}", channel, e);
+                return;
+            }
+
+            tracing::info!("Subscribed to Redis channel: {}", channel);
+
+            let mut stream = pubsub.on_message();
+            while let Some(msg) = stream.next().await {
+                match msg.get_payload::<String>() {
+                    Ok(payload) => {
+                        if tx.send(payload).await.is_err() {
+                            // Receiver dropped, stop the loop
+                            tracing::debug!("SSE client disconnected");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to get message payload: {}", e);
+                    }
+                }
+            }
+        });
+
+        Ok(rx)
     }
 }
 
