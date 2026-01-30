@@ -1,6 +1,6 @@
 //! Collector module - High-performance telemetry ingestion
 //!
-//! The collector receives spans via gRPC and UDP, processes them through
+//! The collector receives spans via gRPC, HTTP, and UDP, processes them through
 //! a pipeline, and stores them in TimescaleDB while streaming to Redis.
 
 mod cost;
@@ -13,10 +13,11 @@ pub use pipeline::{Pipeline, PipelineConfig};
 
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{info, error};
+use tracing::{info, error, warn};
 
+use crate::api::HttpServer;
 use crate::config::Config;
-use crate::db::Database;
+use crate::db::{Database, SpanRepository};
 use crate::error::Result;
 use crate::models::Span;
 
@@ -50,7 +51,7 @@ impl Collector {
         })
     }
 
-    /// Start the collector (gRPC server + pipeline)
+    /// Start the collector (HTTP + gRPC servers + pipeline)
     pub async fn start(&mut self) -> Result<()> {
         info!("Starting AgentTrace collector...");
 
@@ -68,7 +69,21 @@ impl Collector {
             pipeline.start().await;
         });
 
-        // Start gRPC server
+        // Start HTTP server
+        let http_addr = format!("{}:{}", self.config.server.host, self.config.server.http_port);
+        let span_repo = SpanRepository::new(&self.db.postgres);
+        let redis_pool = Some(self.db.redis.clone());
+        let http_server = HttpServer::new(self.pipeline.clone(), span_repo, redis_pool);
+
+        info!("Starting HTTP server on {}", http_addr);
+
+        let http_handle = tokio::spawn(async move {
+            if let Err(e) = http_server.serve(&http_addr).await {
+                error!("HTTP server error: {}", e);
+            }
+        });
+
+        // Start gRPC server (optional, may fail with skeleton impl)
         let grpc_addr = format!("{}:{}", self.config.server.host, self.config.server.grpc_port);
         let grpc_server = GrpcServer::new(self.pipeline.clone());
 
@@ -76,7 +91,7 @@ impl Collector {
 
         let grpc_handle = tokio::spawn(async move {
             if let Err(e) = grpc_server.serve(&grpc_addr).await {
-                error!("gRPC server error: {}", e);
+                warn!("gRPC server error (expected with skeleton impl): {}", e);
             }
         });
 
@@ -92,6 +107,7 @@ impl Collector {
 
         // Cleanup
         pipeline_handle.abort();
+        http_handle.abort();
         grpc_handle.abort();
 
         info!("Collector stopped");

@@ -6,11 +6,50 @@ pub mod handlers;
 pub mod middleware;
 pub mod routes;
 
-// TODO: Implement API
-// - GET /api/v1/traces - List traces
-// - GET /api/v1/traces/:id - Get trace detail
-// - POST /api/v1/spans - Ingest spans
-// - GET /api/v1/metrics - Get metrics
-// - GET /api/v1/costs - Get cost breakdown
-// - GET/POST/DELETE /api/v1/alerts - Manage alerts
-// - GET /api/v1/health - Health check
+pub use handlers::AppState;
+pub use routes::create_router;
+
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tower_http::cors::{Any, CorsLayer};
+use tracing::info;
+
+use crate::collector::Pipeline;
+use crate::db::{RedisPool, SpanRepository};
+use crate::error::Result;
+
+/// HTTP API server
+pub struct HttpServer {
+    state: AppState,
+}
+
+impl HttpServer {
+    /// Create a new HTTP server
+    pub fn new(pipeline: Arc<Pipeline>, span_repo: SpanRepository, redis: Option<RedisPool>) -> Self {
+        Self {
+            state: AppState { pipeline, span_repo, redis },
+        }
+    }
+
+    /// Start the HTTP server
+    pub async fn serve(self, addr: &str) -> Result<()> {
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
+        let app = create_router(self.state).layer(cors);
+
+        let listener = TcpListener::bind(addr)
+            .await
+            .map_err(|e| crate::error::Error::Internal(e.to_string()))?;
+
+        info!("HTTP server listening on {}", addr);
+
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| crate::error::Error::Internal(e.to_string()))?;
+
+        Ok(())
+    }
+}
