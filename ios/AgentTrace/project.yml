@@ -1,0 +1,91 @@
+name: AgentTrace
+options:
+  bundleIdPrefix: com.agenttrace
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    ENABLE_USER_SCRIPT_SANDBOXING: false
+
+targets:
+  AgentTrace:
+    type: application
+    platform: iOS
+    sources:
+      - path: AgentTrace
+        excludes:
+          - "**/*.md"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agenttrace.app
+        INFOPLIST_FILE: AgentTrace/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: AgentTrace/AgentTrace.entitlements
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: true
+        TARGETED_DEVICE_FAMILY: "1,2"
+    entitlements:
+      path: AgentTrace/AgentTrace.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.agenttrace.app
+    dependencies:
+      - target: AgentTraceWidgets
+        embed: true
+      - target: AgentTraceLiveActivity
+        embed: true
+
+  AgentTraceWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AgentTraceWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agenttrace.app.widgets
+        INFOPLIST_FILE: AgentTraceWidgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AgentTraceWidgets/AgentTraceWidgets.entitlements
+        ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: WidgetBackground
+    entitlements:
+      path: AgentTraceWidgets/AgentTraceWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.agenttrace.app
+
+  AgentTraceLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AgentTraceLiveActivity
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agenttrace.app.liveactivity
+        INFOPLIST_FILE: AgentTraceLiveActivity/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AgentTraceLiveActivity/AgentTraceLiveActivity.entitlements
+    entitlements:
+      path: AgentTraceLiveActivity/AgentTraceLiveActivity.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.agenttrace.app
+
+schemes:
+  AgentTrace:
+    build:
+      targets:
+        AgentTrace: all
+        AgentTraceWidgets: all
+        AgentTraceLiveActivity: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

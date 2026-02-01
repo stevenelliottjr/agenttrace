@@ -14,6 +14,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
+use crate::alerting::{AlertEvaluator, AlertRepository};
 use crate::collector::Pipeline;
 use crate::db::{RedisPool, SpanRepository};
 use crate::error::Result;
@@ -25,9 +26,21 @@ pub struct HttpServer {
 
 impl HttpServer {
     /// Create a new HTTP server
-    pub fn new(pipeline: Arc<Pipeline>, span_repo: SpanRepository, redis: Option<RedisPool>) -> Self {
+    pub fn new(
+        pipeline: Arc<Pipeline>,
+        span_repo: SpanRepository,
+        redis: Option<RedisPool>,
+        alert_repo: Option<AlertRepository>,
+        alert_evaluator: Option<Arc<AlertEvaluator>>,
+    ) -> Self {
         Self {
-            state: AppState { pipeline, span_repo, redis },
+            state: AppState {
+                pipeline,
+                span_repo,
+                redis,
+                alert_repo,
+                alert_evaluator,
+            },
         }
     }
 

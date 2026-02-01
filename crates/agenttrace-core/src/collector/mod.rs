@@ -73,7 +73,7 @@ impl Collector {
         let http_addr = format!("{}:{}", self.config.server.host, self.config.server.http_port);
         let span_repo = SpanRepository::new(&self.db.postgres);
         let redis_pool = Some(self.db.redis.clone());
-        let http_server = HttpServer::new(self.pipeline.clone(), span_repo, redis_pool);
+        let http_server = HttpServer::new(self.pipeline.clone(), span_repo, redis_pool, None, None);
 
         info!("Starting HTTP server on {}", http_addr);
 

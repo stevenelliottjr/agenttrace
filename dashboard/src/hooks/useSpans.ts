@@ -39,7 +39,7 @@ export function useRecentTraces(limit: number = 50) {
   const traces: Trace[] = [];
   if (data?.spans) {
     const grouped = groupSpansByTrace(data.spans);
-    for (const [, spans] of grouped) {
+    for (const [, spans] of Array.from(grouped)) {
       traces.push(buildTrace(spans));
     }
     // Sort by most recent
