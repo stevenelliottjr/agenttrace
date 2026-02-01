@@ -67,6 +67,14 @@ pub enum Error {
     /// Channel send error
     #[error("Channel error: {0}")]
     Channel(String),
+
+    /// TUI error
+    #[error("TUI error: {0}")]
+    Tui(String),
+
+    /// HTTP client error
+    #[error("HTTP error: {0}")]
+    Http(String),
 }
 
 impl Error {

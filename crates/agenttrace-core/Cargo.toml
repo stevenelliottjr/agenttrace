@@ -49,9 +49,9 @@ deadpool-redis = "0.14"
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 
 # gRPC (for OTLP compatibility)
-tonic = "0.10"
-prost = "0.12"
-prost-types = "0.12"
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
 
 # TUI
 ratatui = { version = "0.26", features = ["all-widgets"] }
@@ -117,7 +117,7 @@ tempfile = "3.9"
 proptest = "1.4"
 
 [build-dependencies]
-tonic-build = "0.10"
+tonic-build = "0.12"
 
 [features]
 default = ["tui"]

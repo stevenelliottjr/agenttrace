@@ -2,13 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, List, BarChart3, Settings, Zap } from 'lucide-react';
+import { Activity, List, BarChart3, Settings, Zap, DollarSign, Bell, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Activity },
   { href: '/traces', label: 'Traces', icon: List },
+  { href: '/search', label: 'Search', icon: Search },
   { href: '/metrics', label: 'Metrics', icon: BarChart3 },
+  { href: '/costs', label: 'Costs', icon: DollarSign },
+  { href: '/alerts', label: 'Alerts', icon: Bell },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

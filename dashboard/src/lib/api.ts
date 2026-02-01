@@ -74,7 +74,7 @@ export function buildTrace(spans: Span[]): Trace {
     0
   );
   const totalCost = spans.reduce((sum, s) => sum + (s.cost_usd || 0), 0);
-  const serviceNames = [...new Set(spans.map((s) => s.service_name))];
+  const serviceNames = Array.from(new Set(spans.map((s) => s.service_name)));
 
   // Calculate total duration from root span or from first to last
   let totalDuration = rootSpan.duration_ms || 0;

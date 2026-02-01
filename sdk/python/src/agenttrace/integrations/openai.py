@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
 import structlog
 
@@ -19,6 +19,7 @@ logger = structlog.get_logger(__name__)
 _original_create: Any = None
 _original_create_async: Any = None
 _instrumented = False
+_tracer_ref: AgentTrace | None = None
 
 
 def _extract_usage(response: Any) -> tuple[int | None, int | None, int | None]:
@@ -90,6 +91,184 @@ def _build_prompt_preview(messages: list[dict[str, Any]], max_length: int = 500)
     return result[:max_length] if len(result) > max_length else result
 
 
+class StreamingSpanWrapper:
+    """Wrapper for OpenAI streaming responses that captures content for tracing."""
+
+    def __init__(self, stream: Iterator[Any], span: Span, tracer: AgentTrace):
+        self._stream = stream
+        self._span = span
+        self._tracer = tracer
+        self._collected_content: list[str] = []
+        self._collected_tool_calls: list[dict[str, Any]] = []
+        self._usage: dict[str, int] = {}
+
+    def __iter__(self) -> Iterator[Any]:
+        return self
+
+    def __next__(self) -> Any:
+        try:
+            chunk = next(self._stream)
+            self._process_chunk(chunk)
+            return chunk
+        except StopIteration:
+            self._finalize_span(success=True)
+            raise
+        except Exception as e:
+            self._finalize_span(success=False, error=e)
+            raise
+
+    def _process_chunk(self, chunk: Any) -> None:
+        """Process a streaming chunk to extract content."""
+        choices = getattr(chunk, "choices", None)
+        if choices and len(choices) > 0:
+            delta = getattr(choices[0], "delta", None)
+            if delta:
+                # Collect text content
+                content = getattr(delta, "content", None)
+                if content:
+                    self._collected_content.append(content)
+
+                # Collect tool calls
+                tool_calls = getattr(delta, "tool_calls", None)
+                if tool_calls:
+                    for tc in tool_calls:
+                        idx = getattr(tc, "index", 0)
+                        while len(self._collected_tool_calls) <= idx:
+                            self._collected_tool_calls.append(
+                                {"id": None, "type": None, "function": {"name": "", "arguments": ""}}
+                            )
+                        if getattr(tc, "id", None):
+                            self._collected_tool_calls[idx]["id"] = tc.id
+                        if getattr(tc, "type", None):
+                            self._collected_tool_calls[idx]["type"] = tc.type
+                        func = getattr(tc, "function", None)
+                        if func:
+                            if getattr(func, "name", None):
+                                self._collected_tool_calls[idx]["function"]["name"] = func.name
+                            if getattr(func, "arguments", None):
+                                self._collected_tool_calls[idx]["function"]["arguments"] += func.arguments
+
+        # Check for usage in final chunk (OpenAI includes this with stream_options)
+        usage = getattr(chunk, "usage", None)
+        if usage:
+            self._usage["prompt_tokens"] = getattr(usage, "prompt_tokens", 0)
+            self._usage["completion_tokens"] = getattr(usage, "completion_tokens", 0)
+
+    def _finalize_span(self, success: bool, error: Exception | None = None) -> None:
+        """Finalize the span with collected data."""
+        # Set completion preview
+        full_content = "".join(self._collected_content)
+        if full_content:
+            self._span.completion_preview = (
+                full_content[:500] if len(full_content) > 500 else full_content
+            )
+
+        # Set token usage
+        if self._usage:
+            self._span.tokens_in = self._usage.get("prompt_tokens")
+            self._span.tokens_out = self._usage.get("completion_tokens")
+
+        # Set tool calls
+        if self._collected_tool_calls:
+            self._span.tool_name = self._collected_tool_calls[0]["function"]["name"]
+            self._span.tool_input = self._collected_tool_calls[0]["function"]["arguments"]
+            self._span.attributes["llm.tool_calls"] = self._collected_tool_calls
+
+        if success:
+            self._span.end(SpanStatus.OK)
+        else:
+            self._span.set_error(error)
+            self._span.end(SpanStatus.ERROR)
+
+        self._tracer.export(self._span)
+
+
+class AsyncStreamingSpanWrapper:
+    """Async wrapper for OpenAI streaming responses that captures content for tracing."""
+
+    def __init__(self, stream: AsyncIterator[Any], span: Span, tracer: AgentTrace):
+        self._stream = stream
+        self._span = span
+        self._tracer = tracer
+        self._collected_content: list[str] = []
+        self._collected_tool_calls: list[dict[str, Any]] = []
+        self._usage: dict[str, int] = {}
+
+    def __aiter__(self) -> "AsyncStreamingSpanWrapper":
+        return self
+
+    async def __anext__(self) -> Any:
+        try:
+            chunk = await self._stream.__anext__()
+            self._process_chunk(chunk)
+            return chunk
+        except StopAsyncIteration:
+            self._finalize_span(success=True)
+            raise
+        except Exception as e:
+            self._finalize_span(success=False, error=e)
+            raise
+
+    def _process_chunk(self, chunk: Any) -> None:
+        """Process a streaming chunk to extract content."""
+        choices = getattr(chunk, "choices", None)
+        if choices and len(choices) > 0:
+            delta = getattr(choices[0], "delta", None)
+            if delta:
+                content = getattr(delta, "content", None)
+                if content:
+                    self._collected_content.append(content)
+
+                tool_calls = getattr(delta, "tool_calls", None)
+                if tool_calls:
+                    for tc in tool_calls:
+                        idx = getattr(tc, "index", 0)
+                        while len(self._collected_tool_calls) <= idx:
+                            self._collected_tool_calls.append(
+                                {"id": None, "type": None, "function": {"name": "", "arguments": ""}}
+                            )
+                        if getattr(tc, "id", None):
+                            self._collected_tool_calls[idx]["id"] = tc.id
+                        if getattr(tc, "type", None):
+                            self._collected_tool_calls[idx]["type"] = tc.type
+                        func = getattr(tc, "function", None)
+                        if func:
+                            if getattr(func, "name", None):
+                                self._collected_tool_calls[idx]["function"]["name"] = func.name
+                            if getattr(func, "arguments", None):
+                                self._collected_tool_calls[idx]["function"]["arguments"] += func.arguments
+
+        usage = getattr(chunk, "usage", None)
+        if usage:
+            self._usage["prompt_tokens"] = getattr(usage, "prompt_tokens", 0)
+            self._usage["completion_tokens"] = getattr(usage, "completion_tokens", 0)
+
+    def _finalize_span(self, success: bool, error: Exception | None = None) -> None:
+        """Finalize the span with collected data."""
+        full_content = "".join(self._collected_content)
+        if full_content:
+            self._span.completion_preview = (
+                full_content[:500] if len(full_content) > 500 else full_content
+            )
+
+        if self._usage:
+            self._span.tokens_in = self._usage.get("prompt_tokens")
+            self._span.tokens_out = self._usage.get("completion_tokens")
+
+        if self._collected_tool_calls:
+            self._span.tool_name = self._collected_tool_calls[0]["function"]["name"]
+            self._span.tool_input = self._collected_tool_calls[0]["function"]["arguments"]
+            self._span.attributes["llm.tool_calls"] = self._collected_tool_calls
+
+        if success:
+            self._span.end(SpanStatus.OK)
+        else:
+            self._span.set_error(error)
+            self._span.end(SpanStatus.ERROR)
+
+        self._tracer.export(self._span)
+
+
 def _wrap_create(tracer: AgentTrace) -> Any:
     """Wrap the synchronous chat.completions.create method."""
 
@@ -97,6 +276,7 @@ def _wrap_create(tracer: AgentTrace) -> Any:
     def wrapped_create(self: Any, *args: Any, **kwargs: Any) -> Any:
         model = kwargs.get("model", "unknown")
         messages = kwargs.get("messages", [])
+        is_streaming = kwargs.get("stream", False)
 
         span = tracer.start_span(
             "openai.chat.completions.create",
@@ -108,6 +288,7 @@ def _wrap_create(tracer: AgentTrace) -> Any:
                 "llm.request.max_tokens": kwargs.get("max_tokens"),
                 "llm.request.temperature": kwargs.get("temperature"),
                 "llm.request.top_p": kwargs.get("top_p"),
+                "llm.request.stream": is_streaming,
             },
         )
         span.model_name = model
@@ -118,7 +299,11 @@ def _wrap_create(tracer: AgentTrace) -> Any:
             try:
                 response = _original_create(self, *args, **kwargs)
 
-                # Extract usage
+                # Handle streaming response
+                if is_streaming:
+                    return StreamingSpanWrapper(response, span, tracer)
+
+                # Non-streaming: extract usage
                 tokens_in, tokens_out, tokens_reasoning = _extract_usage(response)
                 span.tokens_in = tokens_in
                 span.tokens_out = tokens_out
@@ -142,7 +327,9 @@ def _wrap_create(tracer: AgentTrace) -> Any:
                 span.end(SpanStatus.ERROR)
                 raise
             finally:
-                tracer.export(span)
+                # Only export for non-streaming; streaming wrapper handles export
+                if not is_streaming:
+                    tracer.export(span)
 
     return wrapped_create
 
@@ -154,6 +341,7 @@ def _wrap_create_async(tracer: AgentTrace) -> Any:
     async def wrapped_create_async(self: Any, *args: Any, **kwargs: Any) -> Any:
         model = kwargs.get("model", "unknown")
         messages = kwargs.get("messages", [])
+        is_streaming = kwargs.get("stream", False)
 
         span = tracer.start_span(
             "openai.chat.completions.create",
@@ -165,6 +353,7 @@ def _wrap_create_async(tracer: AgentTrace) -> Any:
                 "llm.request.max_tokens": kwargs.get("max_tokens"),
                 "llm.request.temperature": kwargs.get("temperature"),
                 "llm.request.top_p": kwargs.get("top_p"),
+                "llm.request.stream": is_streaming,
             },
         )
         span.model_name = model
@@ -175,7 +364,11 @@ def _wrap_create_async(tracer: AgentTrace) -> Any:
             try:
                 response = await _original_create_async(self, *args, **kwargs)
 
-                # Extract usage
+                # Handle streaming response
+                if is_streaming:
+                    return AsyncStreamingSpanWrapper(response, span, tracer)
+
+                # Non-streaming: extract usage
                 tokens_in, tokens_out, tokens_reasoning = _extract_usage(response)
                 span.tokens_in = tokens_in
                 span.tokens_out = tokens_out
@@ -199,7 +392,9 @@ def _wrap_create_async(tracer: AgentTrace) -> Any:
                 span.end(SpanStatus.ERROR)
                 raise
             finally:
-                tracer.export(span)
+                # Only export for non-streaming; streaming wrapper handles export
+                if not is_streaming:
+                    tracer.export(span)
 
     return wrapped_create_async
 
