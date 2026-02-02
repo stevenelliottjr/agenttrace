@@ -54,6 +54,9 @@ out/
 xcuserdata/
 *.xcuserstate
 
+# iOS app (not part of core project)
+ios/
+
 # Environment
 .env
 .env.local
