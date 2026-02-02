@@ -90,3 +90,4 @@ htmlcov/
 /proto/*.pb.go
 /proto/*_pb2.py
 /proto/*.rs
+PITCH.md
