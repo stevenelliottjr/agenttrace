@@ -356,14 +356,6 @@ cargo test
 
 ---
 
-## Community
-
-- [GitHub Discussions](https://github.com/stevenelliottjr/agenttrace/discussions) — Questions and ideas
-- [Discord](https://discord.gg/agenttrace) — Real-time chat
-- [Twitter](https://twitter.com/agenttrace) — Updates and announcements
-
----
-
 ## License
 
 MIT License — see [LICENSE](./LICENSE) for details.
