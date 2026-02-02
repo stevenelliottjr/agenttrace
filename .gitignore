@@ -50,6 +50,10 @@ out/
 # Claude Code
 .claude/
 
+# Xcode user-specific files
+xcuserdata/
+*.xcuserstate
+
 # Environment
 .env
 .env.local
