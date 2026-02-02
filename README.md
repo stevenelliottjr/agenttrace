@@ -11,7 +11,6 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.75+-orange.svg" alt="Rust"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python"></a>
-  <a href="https://discord.gg/agenttrace"><img src="https://img.shields.io/badge/Discord-Join-7289da.svg" alt="Discord"></a>
 </p>
 
 <p align="center">

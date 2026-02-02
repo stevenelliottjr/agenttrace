@@ -256,7 +256,6 @@ Show your support: [github.com/stevenelliottjr/agenttrace](https://github.com/st
 
 ### Join the Discussion
 - [GitHub Discussions](https://github.com/stevenelliottjr/agenttrace/discussions)
-- [Discord Community](https://discord.gg/agenttrace)
 
 ### Contribute
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to get started.
