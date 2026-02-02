@@ -35,38 +35,53 @@ services:
       retries: 5
     command: redis-server --appendonly yes
 
-  # AgentTrace Collector (uncomment when built)
-  # collector:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: agenttrace-collector
-  #   ports:
-  #     - "8080:8080"   # HTTP API
-  #     - "4317:4317"   # gRPC
-  #     - "4318:4318/udp"  # UDP
-  #   environment:
-  #     DATABASE_URL: postgres://agenttrace:agenttrace_dev@timescaledb:5432/agenttrace
-  #     REDIS_URL: redis://redis:6379
-  #     RUST_LOG: info
-  #   depends_on:
-  #     timescaledb:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
+  # AgentTrace Collector (Rust)
+  collector:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.collector
+    container_name: agenttrace-collector
+    ports:
+      - "8080:8080"     # HTTP API
+      - "4317:4317"     # gRPC
+      - "4318:4318/udp" # UDP
+    environment:
+      DATABASE_URL: postgres://agenttrace:agenttrace_dev@timescaledb:5432/agenttrace
+      REDIS_URL: redis://redis:6379
+      RUST_LOG: info,agenttrace=debug
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  # Web Dashboard (uncomment when built)
-  # dashboard:
-  #   build:
-  #     context: ./dashboard
-  #     dockerfile: Dockerfile
-  #   container_name: agenttrace-dashboard
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     VITE_API_URL: http://localhost:8080
-  #   depends_on:
-  #     - collector
+  # Web Dashboard (Next.js)
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: ../docker/Dockerfile.dashboard
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    container_name: agenttrace-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    depends_on:
+      collector:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   timescaledb_data:

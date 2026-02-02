@@ -1,10 +1,55 @@
 # AgentTrace Makefile
 # ==================
 
-.PHONY: all build test clean dev setup help
+.PHONY: all build test clean dev setup help up down logs build-docker clean-docker
+
+# Detect docker compose command (v2 vs legacy)
+DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 # Default target
 all: build
+
+# ==================
+# Docker Stack (Full Stack)
+# ==================
+
+up: ## Start all services with Docker Compose
+	@echo "🚀 Starting AgentTrace stack..."
+	$(DOCKER_COMPOSE) up -d --build
+	@echo ""
+	@echo "✅ Services starting! Run 'make status' to check health."
+	@echo "   Dashboard: http://localhost:3000"
+	@echo "   API:       http://localhost:8080"
+
+down: ## Stop all services
+	@echo "🛑 Stopping AgentTrace stack..."
+	$(DOCKER_COMPOSE) down
+
+logs: ## Follow logs from all services
+	$(DOCKER_COMPOSE) logs -f
+
+logs-collector: ## Follow collector logs only
+	$(DOCKER_COMPOSE) logs -f collector
+
+logs-dashboard: ## Follow dashboard logs only
+	$(DOCKER_COMPOSE) logs -f dashboard
+
+status: ## Show service status
+	@echo "📊 Service Status:"
+	@$(DOCKER_COMPOSE) ps
+
+build-docker: ## Build all Docker images
+	@echo "🏗️  Building Docker images..."
+	$(DOCKER_COMPOSE) build
+
+clean-docker: ## Remove all containers, volumes, and images
+	@echo "🧹 Cleaning Docker resources..."
+	$(DOCKER_COMPOSE) down -v --rmi local
+	@echo "✅ Docker resources cleaned!"
+
+restart: ## Restart all services
+	@echo "🔄 Restarting AgentTrace stack..."
+	$(DOCKER_COMPOSE) restart
 
 # ==================
 # Setup

@@ -1,5 +1,7 @@
 # AgentTrace Collector Dockerfile
-FROM rust:1.75-slim as builder
+# Multi-stage build for optimized production image
+
+FROM rust:1.75-slim AS builder
 
 WORKDIR /app
 
@@ -10,27 +12,32 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests
-COPY crates/agenttrace-core/Cargo.toml crates/agenttrace-core/Cargo.lock ./
+# Copy workspace manifests first for dependency caching
+COPY Cargo.toml Cargo.lock ./
 
-# Create dummy src to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release && rm -rf src
+# Copy the crates directory structure
+COPY crates/ ./crates/
 
-# Copy actual source
-COPY crates/agenttrace-core/src ./src
+# Copy proto files for gRPC code generation
+COPY proto/ ./proto/
 
 # Build for release
-RUN touch src/main.rs && cargo build --release
+RUN cargo build -p agenttrace --release
 
 # Runtime image
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy the built binary
 COPY --from=builder /app/target/release/agenttrace /usr/local/bin/
+
+# Create non-root user for security
+RUN useradd -r -s /bin/false agenttrace
+USER agenttrace
 
 EXPOSE 4317 4318 8080
 
