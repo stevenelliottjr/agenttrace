@@ -21,6 +21,9 @@ COPY crates/ ./crates/
 # Copy proto files for gRPC code generation
 COPY proto/ ./proto/
 
+# Copy migrations (referenced by sqlx::migrate! macro)
+COPY migrations/ ./migrations/
+
 # Build for release
 RUN cargo build -p agenttrace --release
 
