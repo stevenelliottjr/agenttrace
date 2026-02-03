@@ -51,6 +51,8 @@ class SpanEvent(BaseModel):
 class Span(BaseModel):
     """A single trace span representing an operation."""
 
+    model_config = {"protected_namespaces": ()}
+
     span_id: str = Field(default_factory=lambda: uuid4().hex[:16])
     trace_id: str = Field(default_factory=lambda: uuid4().hex)
     parent_span_id: str | None = None

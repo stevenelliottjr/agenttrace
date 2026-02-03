@@ -307,7 +307,7 @@ def _wrap_create(tracer: AgentTrace) -> Any:
 
         with SpanContext(span):
             try:
-                response = _original_create(self, *args, **kwargs)
+                response = _original_create.__get__(self, type(self))(*args, **kwargs)
 
                 # Extract usage
                 tokens_in, tokens_out = _extract_usage(response)
@@ -365,7 +365,7 @@ def _wrap_create_async(tracer: AgentTrace) -> Any:
 
         with SpanContext(span):
             try:
-                response = await _original_create_async(self, *args, **kwargs)
+                response = await _original_create_async.__get__(self, type(self))(*args, **kwargs)
 
                 # Extract usage
                 tokens_in, tokens_out = _extract_usage(response)
@@ -423,7 +423,7 @@ def _wrap_stream(tracer: AgentTrace) -> Any:
         span.prompt_preview = _build_prompt_preview(messages)
 
         try:
-            stream = _original_stream(self, *args, **kwargs)
+            stream = _original_stream.__get__(self, type(self))(*args, **kwargs)
             return StreamingSpanWrapper(stream, span, tracer)
         except Exception as e:
             span.set_error(e)
@@ -459,7 +459,7 @@ def _wrap_stream_async(tracer: AgentTrace) -> Any:
         span.prompt_preview = _build_prompt_preview(messages)
 
         try:
-            stream = await _original_stream_async(self, *args, **kwargs)
+            stream = await _original_stream_async.__get__(self, type(self))(*args, **kwargs)
             return AsyncStreamingSpanWrapper(stream, span, tracer)
         except Exception as e:
             span.set_error(e)
