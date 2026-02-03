@@ -87,103 +87,213 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Install curl
+install_curl() {
+    print_step "Installing curl..."
+    case "$OS" in
+        linux|wsl)
+            if command_exists apt-get; then
+                sudo apt-get update && sudo apt-get install -y curl
+            elif command_exists yum; then
+                sudo yum install -y curl
+            elif command_exists dnf; then
+                sudo dnf install -y curl
+            else
+                print_error "Could not detect package manager to install curl."
+                exit 1
+            fi
+            ;;
+        macos)
+            if command_exists brew; then
+                brew install curl
+            else
+                print_error "Homebrew is not installed. Please install curl manually."
+                echo "  Install Homebrew: https://brew.sh"
+                exit 1
+            fi
+            ;;
+    esac
+
+    if command_exists curl; then
+        print_success "curl installed successfully."
+    else
+        print_error "Failed to install curl."
+        exit 1
+    fi
+}
+
+# Install git
+install_git() {
+    print_step "Installing git..."
+    case "$OS" in
+        linux|wsl)
+            if command_exists apt-get; then
+                sudo apt-get update && sudo apt-get install -y git
+            elif command_exists yum; then
+                sudo yum install -y git
+            elif command_exists dnf; then
+                sudo dnf install -y git
+            else
+                print_error "Could not detect package manager to install git."
+                exit 1
+            fi
+            ;;
+        macos)
+            if command_exists brew; then
+                brew install git
+            else
+                print_step "Attempting to install git via Xcode Command Line Tools..."
+                xcode-select --install 2>/dev/null || true
+                echo "  If prompted, please complete the Xcode CLI tools installation and re-run this script."
+                exit 1
+            fi
+            ;;
+    esac
+
+    if command_exists git; then
+        print_success "git installed successfully."
+    else
+        print_error "Failed to install git."
+        exit 1
+    fi
+}
+
+# Install Docker
+install_docker() {
+    print_step "Installing Docker..."
+    case "$OS" in
+        linux|wsl)
+            echo "  Using Docker's official install script..."
+            if command_exists curl; then
+                curl -fsSL https://get.docker.com | sudo sh
+            elif command_exists wget; then
+                wget -qO- https://get.docker.com | sudo sh
+            else
+                print_error "Neither curl nor wget is available. Cannot download Docker install script."
+                exit 1
+            fi
+
+            # Add current user to docker group so sudo is not required
+            if ! groups "$USER" | grep -q '\bdocker\b'; then
+                echo "  Adding $USER to the docker group..."
+                sudo usermod -aG docker "$USER"
+                print_warning "You may need to log out and back in for group changes to take effect."
+            fi
+
+            # Start Docker daemon
+            if command_exists systemctl; then
+                sudo systemctl start docker
+                sudo systemctl enable docker
+            elif command_exists service; then
+                sudo service docker start
+            fi
+            ;;
+        macos)
+            if command_exists brew; then
+                echo "  Installing Docker Desktop via Homebrew..."
+                brew install --cask docker
+                echo "  Please open Docker Desktop to complete setup, then re-run this script."
+                exit 0
+            else
+                print_error "Docker Desktop for macOS requires a GUI installer."
+                echo "  Download it from: https://docs.docker.com/desktop/install/mac-install/"
+                echo "  Or install Homebrew first: https://brew.sh"
+                exit 1
+            fi
+            ;;
+    esac
+
+    if command_exists docker; then
+        print_success "Docker installed successfully: $(docker --version | head -n1)"
+    else
+        print_error "Docker installation failed."
+        echo "  Please install Docker manually:"
+        echo "  https://docs.docker.com/engine/install/"
+        exit 1
+    fi
+}
+
+# Start Docker daemon if not running
+start_docker_daemon() {
+    if docker info >/dev/null 2>&1; then
+        return 0
+    fi
+
+    print_step "Starting Docker daemon..."
+    case "$OS" in
+        linux|wsl)
+            if command_exists systemctl; then
+                sudo systemctl start docker
+            elif command_exists service; then
+                sudo service docker start
+            else
+                print_error "Could not start Docker daemon. No supported init system found."
+                exit 1
+            fi
+
+            # Wait briefly for daemon to be ready
+            local attempts=0
+            while [ $attempts -lt 15 ]; do
+                if docker info >/dev/null 2>&1; then
+                    print_success "Docker daemon is running."
+                    return 0
+                fi
+                sleep 2
+                attempts=$((attempts + 1))
+            done
+
+            print_error "Docker daemon failed to start."
+            echo "  Try starting it manually: sudo systemctl start docker"
+            exit 1
+            ;;
+        macos)
+            print_error "Docker daemon is not running. Please open Docker Desktop."
+            exit 1
+            ;;
+    esac
+}
+
 # Check prerequisites
 check_prerequisites() {
     print_step "Checking prerequisites..."
 
-    local missing=()
+    # Check and install curl
+    if ! command_exists curl; then
+        print_warning "curl is not installed."
+        install_curl
+    fi
 
-    # Check Docker
+    # Check and install git
+    if ! command_exists git; then
+        print_warning "git is not installed."
+        install_git
+    else
+        print_success "Git: $(git --version)"
+    fi
+
+    # Check and install Docker
     if ! command_exists docker; then
-        missing+=("docker")
+        print_warning "Docker is not installed."
+        install_docker
     else
         print_success "Docker: $(docker --version | head -n1)"
     fi
 
-    # Check Docker Compose (v2 style: docker compose)
+    # Check Docker Compose (v2 plugin — included by the official install script)
     if docker compose version >/dev/null 2>&1; then
         print_success "Docker Compose: $(docker compose version --short)"
     elif command_exists docker-compose; then
         print_warning "Found legacy docker-compose. Recommend upgrading to Docker Compose V2."
         print_success "Docker Compose: $(docker-compose --version)"
     else
-        missing+=("docker-compose")
-    fi
-
-    # Check Git
-    if ! command_exists git; then
-        missing+=("git")
-    else
-        print_success "Git: $(git --version)"
-    fi
-
-    # Check curl (for health checks)
-    if ! command_exists curl; then
-        missing+=("curl")
-    fi
-
-    # Report missing dependencies
-    if [ ${#missing[@]} -ne 0 ]; then
-        print_error "Missing required dependencies: ${missing[*]}"
-        echo ""
-        echo "Please install the missing dependencies:"
-
-        if [[ " ${missing[*]} " =~ " docker " ]] || [[ " ${missing[*]} " =~ " docker-compose " ]]; then
-            case "$OS" in
-                macos)
-                    echo "  Docker Desktop: https://docs.docker.com/desktop/install/mac-install/"
-                    ;;
-                linux)
-                    echo "  Docker Engine: https://docs.docker.com/engine/install/"
-                    ;;
-                wsl)
-                    echo "  Docker Desktop for Windows: https://docs.docker.com/desktop/install/windows-install/"
-                    echo "  Enable WSL2 backend in Docker Desktop settings"
-                    ;;
-            esac
-        fi
-
-        if [[ " ${missing[*]} " =~ " git " ]]; then
-            case "$OS" in
-                macos)
-                    echo "  Git: brew install git"
-                    ;;
-                linux|wsl)
-                    echo "  Git: sudo apt install git (Ubuntu/Debian) or sudo yum install git (RHEL/CentOS)"
-                    ;;
-            esac
-        fi
-
-        if [[ " ${missing[*]} " =~ " curl " ]]; then
-            case "$OS" in
-                macos)
-                    echo "  curl: brew install curl"
-                    ;;
-                linux|wsl)
-                    echo "  curl: sudo apt install curl (Ubuntu/Debian)"
-                    ;;
-            esac
-        fi
-
+        print_error "Docker Compose is not available."
+        echo "  The Docker install script should have included Compose V2."
+        echo "  Try: sudo apt-get install -y docker-compose-plugin"
         exit 1
     fi
 
-    # Check if Docker daemon is running
-    if ! docker info >/dev/null 2>&1; then
-        print_error "Docker daemon is not running."
-        case "$OS" in
-            macos)
-                echo "  Please start Docker Desktop."
-                ;;
-            linux)
-                echo "  Please start Docker: sudo systemctl start docker"
-                ;;
-            wsl)
-                echo "  Please start Docker Desktop for Windows."
-                ;;
-        esac
-        exit 1
-    fi
+    # Ensure Docker daemon is running
+    start_docker_daemon
 
     print_success "All prerequisites satisfied!"
 }
