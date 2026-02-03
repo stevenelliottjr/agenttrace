@@ -100,7 +100,8 @@ pub struct RedisConfig {
 impl Default for RedisConfig {
     fn default() -> Self {
         Self {
-            url: "redis://localhost:6379".to_string(),
+            url: std::env::var("REDIS_URL")
+                .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
             max_connections: 10,
         }
     }
