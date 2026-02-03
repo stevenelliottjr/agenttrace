@@ -158,6 +158,51 @@ install_git() {
     fi
 }
 
+# Install build dependencies (pkg-config, libssl-dev, protobuf-compiler)
+install_build_deps() {
+    print_step "Installing build dependencies (OpenSSL, pkg-config, protobuf)..."
+    case "$OS" in
+        linux|wsl)
+            if command_exists apt-get; then
+                sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev protobuf-compiler build-essential
+            elif command_exists yum; then
+                sudo yum install -y pkgconfig openssl-devel protobuf-compiler gcc make
+            elif command_exists dnf; then
+                sudo dnf install -y pkgconfig openssl-devel protobuf-compiler gcc make
+            else
+                print_error "Could not detect package manager to install build dependencies."
+                exit 1
+            fi
+            ;;
+        macos)
+            if command_exists brew; then
+                brew install pkg-config openssl protobuf
+            else
+                print_error "Homebrew is not installed. Please install build dependencies manually."
+                echo "  Install Homebrew: https://brew.sh"
+                exit 1
+            fi
+            ;;
+    esac
+    print_success "Build dependencies installed."
+}
+
+# Install Rust via rustup
+install_rust() {
+    print_step "Installing Rust via rustup..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    # Source cargo env for the current shell
+    . "$HOME/.cargo/env"
+
+    if command_exists rustc; then
+        print_success "Rust installed: $(rustc --version)"
+    else
+        print_error "Rust installation failed."
+        echo "  Install manually: https://rustup.rs"
+        exit 1
+    fi
+}
+
 # Install Docker
 install_docker() {
     print_step "Installing Docker..."
@@ -269,6 +314,22 @@ check_prerequisites() {
         install_git
     else
         print_success "Git: $(git --version)"
+    fi
+
+    # Check and install Rust (needed for TUI and local collector builds)
+    if ! command_exists rustc; then
+        print_warning "Rust is not installed."
+        install_rust
+    else
+        print_success "Rust: $(rustc --version)"
+    fi
+
+    # Check and install build dependencies (OpenSSL, pkg-config, protobuf)
+    if ! command_exists pkg-config || ! pkg-config --exists openssl 2>/dev/null; then
+        print_warning "Build dependencies (pkg-config, libssl-dev) not found."
+        install_build_deps
+    else
+        print_success "Build deps: pkg-config, OpenSSL"
     fi
 
     # Check and install Docker
