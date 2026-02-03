@@ -27,8 +27,8 @@ COPY migrations/ ./migrations/
 # Build for release
 RUN cargo build -p agenttrace --release
 
-# Runtime image
-FROM debian:bookworm-slim
+# Runtime image — must match the builder's glibc version
+FROM debian:sid-slim
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
