@@ -426,16 +426,22 @@ print_success_message() {
     echo ""
     echo -e "${GREEN}${BOLD}AgentTrace is running!${NC}"
     echo ""
-    echo -e "${BOLD}Services:${NC}"
-    echo -e "  Dashboard:   ${CYAN}http://localhost:3000${NC}"
-    echo -e "  API:         ${CYAN}http://localhost:8080${NC}"
-    echo -e "  gRPC:        ${CYAN}localhost:4317${NC}"
-    echo -e "  UDP:         ${CYAN}localhost:4318${NC}"
+    echo -e "${BOLD}Open the Dashboard:${NC}"
+    echo -e "  ${CYAN}http://localhost:3000${NC}"
     echo ""
-    echo -e "${BOLD}Quick Start:${NC}"
+    echo -e "${BOLD}Services:${NC}"
+    echo -e "  Dashboard (React):  ${CYAN}http://localhost:3000${NC}"
+    echo -e "  API / Health:       ${CYAN}http://localhost:8080${NC}"
+    echo -e "  gRPC ingestion:     ${CYAN}localhost:4317${NC}"
+    echo -e "  UDP  ingestion:     ${CYAN}localhost:4318${NC}"
+    echo ""
+    echo -e "${BOLD}TUI Dashboard (terminal):${NC}"
+    echo "  cd $INSTALL_DIR"
+    echo "  make dev-tui"
+    echo ""
+    echo -e "${BOLD}SDK Quick Start:${NC}"
     echo "  pip install agenttrace"
     echo ""
-    echo -e "${BOLD}Example:${NC}"
     cat << 'EOF'
   from agenttrace import AgentTrace
 
@@ -443,7 +449,6 @@ print_success_message() {
 
   with tracer.trace("my-agent") as trace:
       with trace.span("llm-call", span_type="llm") as span:
-          # Your LLM call here
           span.set_attribute("model", "gpt-4")
           span.set_attribute("tokens.input", 100)
           span.set_attribute("tokens.output", 50)
@@ -451,9 +456,19 @@ EOF
     echo ""
     echo -e "${BOLD}Management:${NC}"
     echo "  cd $INSTALL_DIR"
-    echo "  make up       # Start services"
-    echo "  make down     # Stop services"
-    echo "  make logs     # View logs"
+    echo "  make up          # Start all services"
+    echo "  make down        # Stop all services"
+    echo "  make restart     # Restart all services"
+    echo "  make logs        # Follow all logs"
+    echo "  make status      # Show service health"
+    echo ""
+    echo -e "${BOLD}Useful Commands:${NC}"
+    echo "  make dev-collector   # Run collector with hot reload"
+    echo "  make dev-dashboard   # Run React dashboard in dev mode"
+    echo "  make dev-tui         # Launch the terminal UI"
+    echo "  make db-shell        # Open a psql shell"
+    echo "  make db-seed         # Load sample data"
+    echo "  make help            # Show all available commands"
     echo ""
 }
 
